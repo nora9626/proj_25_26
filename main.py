@@ -332,6 +332,71 @@ def import_ncbi_via_api(db: Session = Depends(get_db)):
     """
     return import_ncbi_f8(db=db)
 
+@app.post("/api/import-f8-reference-transcript/")
+def import_f8_reference_transcript(db: Session = Depends(get_db)):
+    accession = "NM_000132.4"
+
+    url = (
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+        f"?db=nuccore&id={accession}&rettype=fasta&retmode=text"
+    )
+
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+
+    fasta_text = response.text.strip()
+
+    if not fasta_text.startswith(">"):
+        raise HTTPException(
+            status_code=502,
+            detail="NCBI did not return FASTA text for NM_000132.4"
+        )
+
+    fasta_lines = fasta_text.splitlines()
+    header = fasta_lines[0].replace(">", "").strip()
+    sequence = "".join(line.strip() for line in fasta_lines[1:])
+
+    existing = (
+        db.query(Term)
+        .filter(
+            Term.trans == accession,
+            Term.disease_class == "Hemophilia A / F8 reference transcript"
+        )
+        .first()
+    )
+
+    if existing:
+        return {
+            "status": "already_exists",
+            "accession": accession,
+            "imported_id": existing.id,
+            "term": existing.term,
+            "sequence_length": len(existing.sequence or ""),
+            "disease_class": existing.disease_class
+        }
+
+    new_term = Term(
+        term=header[:255],
+        trans=accession,
+        defe="Wild-type/reference F8 transcript from NCBI RefSeq",
+        sequence=sequence,
+        fasta_seq=fasta_text,
+        disease_class="Hemophilia A / F8 reference transcript",
+        confidence_score=1.00
+    )
+
+    db.add(new_term)
+    db.commit()
+    db.refresh(new_term)
+
+    return {
+        "status": "success",
+        "accession": accession,
+        "imported_id": new_term.id,
+        "term": new_term.term,
+        "sequence_length": len(sequence),
+        "disease_class": new_term.disease_class
+    }
 
 @app.post("/api/import-hemophilia-f8-literature/")
 def import_hemophilia_f8_literature(
