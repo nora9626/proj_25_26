@@ -9,6 +9,8 @@ ADD COLUMN fasta_seq LONGTEXT NULL,
 ADD COLUMN disease_class VARCHAR(255) NULL,
 ADD COLUMN confidence_score DECIMAL(5,2) NULL,
 ADD COLUMN add_date DATETIME DEFAULT CURRENT_TIMESTAMP;
+-- Allow longer NCBI FASTA record names / headers
+ALTER TABLE terms MODIFY COLUMN term VARCHAR(255) NOT NULL;
 
 -- Diagnostic checkpoint: run after the ALTER TABLE command
 -- DESCRIBE terms;
